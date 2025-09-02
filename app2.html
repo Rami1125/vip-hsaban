@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIP Portal | ח. סבן בע"מ</title>
+    <!-- ... head content remains the same ... -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/locale/he.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ... all styles remain the same ... */
+    </style>
+</head>
+<body class="flex justify-center items-center h-screen bg-gray-200">
+
+    <div class="app-shell max-w-md w-full h-full md:h-[95vh] md:max-h-[800px] flex flex-col">
+        <!-- All your HTML structure remains the same -->
+    </div>
+
+    <script>
+    // --- STATE & CONFIG ---
+    let state = { client: null, projects: [], newOrders: [], activeContainers: [], timers: {} };
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwWrkMs1Ae3U8JpS1FIxvfmk8chACQfEb2ssaedSUD4G6SYlt1Z3_RJ0vEqk9RVtET9/exec';
+    
+    // --- API & UTILITIES ---
+    async function api(action, params = {}) {
+        const url = new URL(GAS_WEB_APP_URL);
+        url.searchParams.set('action', action);
+        Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`שגיאת רשת (${res.status}).`);
+            const result = await res.json();
+            if (!result.success) throw new Error(result.message);
+            return result.data;
+        } catch (error) {
+            console.error("API Error:", error);
+            Swal.fire('שגיאת תקשורת', error.message, 'error');
+            return null;
+        }
+    }
+
+    // --- CORE APP LOGIC (UPDATED) ---
+    async function initializeMainApp() {
+        document.getElementById('client-name').textContent = state.client['שם_לקוח'];
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('main-app').classList.remove('hidden', 'flex');
+        document.getElementById('main-app').classList.add('fade-in', 'flex');
+
+        const phone = state.client['טלפון_לקוח'];
+
+        // THE FIX IS HERE: We now make a single, powerful call to the server
+        const dashboardData = await api('getDashboardData', { phone });
+        
+        if (dashboardData) {
+            state.newOrders = dashboardData.newOrders || [];
+            state.activeContainers = (dashboardData.activeContainers || []).map(processContainerData);
+            state.projects = dashboardData.projects || [];
+        }
+
+        setupEventListeners();
+        updateClock();
+        setInterval(updateClock, 1000);
+        navigateTo('containers'); 
+    }
+
+    // --- All other functions (processContainerData, navigateTo, etc.) remain the same
+    function processContainerData(container) { /* ... same as before ... */ }
+    function setupEventListeners() { /* ... same as before ... */ }
+    function navigateTo(screen) { /* ... same as before ... */ }
+    function renderHomeScreen() { /* ... same as before ... */ }
+    function renderContainersScreen() { /* ... same as before ... */ }
+    function activeContainerCard(container) { /* ... same as before ... */ }
+    function pendingOrderCard(order) { /* ... same as before ... */ }
+    function startCountdown(element, startDate) { /* ... same as before ... */ }
+    function showNewOrderChoice() { /* ... same as before ... */ }
+    function startNewContainerOrder() { /* ... same as before ... */ }
+    function renderNewOrderModal() { /* ... same as before ... */ }
+    function renderOrderFormStep() { /* ... same as before ... */ }
+    function nextStep(step) { /* ... same as before ... */ }
+    function renderProgressBar() { /* ... same as before ... */ }
+    function getStep1Html() { /* ... same as before ... */ }
+    function setupStep1Listeners() { /* ... same as before ... */ }
+    function getStep2Html() { /* ... same as before ... */ }
+    function setupStep2Listeners() { /* ... same as before ... */ }
+    async function handleSendOrder(orderType) { /* ... same as before ... */ }
+    function updateClock() { /* ... same as before ... */ }
+
+    // --- APP START ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const loginBtn = document.getElementById('login-btn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', async () => {
+                loginBtn.disabled = true;
+                loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> מאמת פרטים...';
+                
+                state.client = await api('auth', { 
+                    phone: document.getElementById('phone').value,
+                    password: document.getElementById('password').value
+                });
+                
+                if (state.client) {
+                    initializeMainApp();
+                } else {
+                    loginBtn.disabled = false;
+                    loginBtn.innerHTML = 'כניסה למערכת';
+                }
+            });
+        }
+    });
+    </script>
+</body>
+</html>
