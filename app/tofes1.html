@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>טופס הזמנת מכולה</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2E8B57', // ירוק כהה
+                        secondary: '#48BB78', // ירוק בהיר
+                        'bg-gray': '#F7F9FB',
+                        'text-gray': '#4A5568',
+                    },
+                    fontFamily: {
+                        sans: ['Rubik', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: #F7F9FB;
+        }
+        .container-card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .step-active-icon {
+            background-color: #2E8B57;
+            color: white;
+            border: 2px solid #2E8B57;
+        }
+        .step-inactive-icon {
+            background-color: #E2E8F0;
+            color: #718096;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen items-center p-4 sm:p-8">
+    <div class="w-full max-w-2xl bg-white rounded-xl shadow-lg container-card p-6 sm:p-8">
+        <!-- כותרת ופס התקדמות -->
+        <h1 class="text-3xl font-bold text-center text-primary mb-4">הזמנת מכולה</h1>
+        <p class="text-center text-text-gray mb-8">בצע הזמנה מהירה ויעילה דרך הממשק הדיגיטלי.</p>
+        
+        <div class="flex justify-between items-center mb-10 relative">
+            <div class="flex-1 border-t-2 border-dashed border-gray-300 absolute w-full top-1/2 -mt-px left-0"></div>
+            <div id="step-1-icon" class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors duration-300 step-active-icon">1</div>
+            <div id="step-2-icon" class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors duration-300 step-inactive-icon">2</div>
+            <div id="step-3-icon" class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors duration-300 step-inactive-icon">3</div>
+        </div>
+
+        <!-- טופס השלבים -->
+        <form id="order-form">
+            <!-- שלב 1: בחירת פרויקט וסוג מכולה -->
+            <div id="step-1" class="step">
+                <h2 class="text-xl font-semibold text-text-gray mb-4">פרטי הזמנה</h2>
+                <div class="mb-6">
+                    <label for="project-select" class="block text-sm font-medium text-gray-700 mb-2">בחר פרויקט קיים</label>
+                    <select id="project-select" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                        <!-- אופציות ייטענו דינמית מהשרת -->
+                        <option value="" disabled selected>בחר פרויקט...</option>
+                        <option value="proj1">אלנבי - ויצמן 4, רעננה</option>
+                        <option value="proj2">אורבר - ויצמן 2, כפר סבא</option>
+                        <option value="proj3">אורניל - הסתדרות 29, רעננה</option>
+                    </select>
+                </div>
+                <div class="mb-6">
+                    <label for="container-type" class="block text-sm font-medium text-gray-700 mb-2">סוג מכולה</label>
+                    <div class="flex flex-col space-y-4">
+                        <label class="flex items-center p-4 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                            <input type="radio" name="container-type" value="8" class="form-radio h-5 w-5 text-primary focus:ring-primary" checked>
+                            <span class="ml-3 text-sm font-medium text-gray-700">מכולה 8 קוב</span>
+                            <span class="ml-auto text-xs text-gray-500">פינוי פסולת בניין</span>
+                        </label>
+                        <label class="flex items-center p-4 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                            <input type="radio" name="container-type" value="12" class="form-radio h-5 w-5 text-primary focus:ring-primary">
+                            <span class="ml-3 text-sm font-medium text-gray-700">מכולה 12 קוב</span>
+                            <span class="ml-auto text-xs text-gray-500">פינוי פסולת בניין גדולה</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <label for="action-type" class="block text-sm font-medium text-gray-700 mb-2">סוג פעולה</label>
+                    <div class="flex justify-between space-x-2">
+                        <button type="button" data-action="הורדה" class="action-btn flex-1 p-3 text-center rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:border-primary transition-colors duration-200">הורדה</button>
+                        <button type="button" data-action="החלפה" class="action-btn flex-1 p-3 text-center rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:border-primary transition-colors duration-200">החלפה</button>
+                        <button type="button" data-action="העלאה" class="action-btn flex-1 p-3 text-center rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:border-primary transition-colors duration-200">העלאה</button>
+                    </div>
+                </div>
+                <button type="button" id="next-step-1" class="w-full py-3 mt-4 bg-primary text-white rounded-lg font-bold transition-colors duration-200 hover:bg-secondary">המשך</button>
+            </div>
+            
+            <!-- שלב 2: פרטי מיקום ותזמון -->
+            <div id="step-2" class="step hidden">
+                <h2 class="text-xl font-semibold text-text-gray mb-4">פרטי מיקום ותזמון</h2>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">כתובת משלוח</label>
+                    <input type="text" id="delivery-address" disabled class="w-full p-3 bg-gray-100 border border-gray-300 rounded-md text-gray-600 cursor-not-allowed">
+                    <p class="mt-1 text-xs text-gray-500">כתובת הפרויקט שצויין בשלב הקודם.</p>
+                </div>
+                <div class="mb-6">
+                    <label for="preferred-date" class="block text-sm font-medium text-gray-700 mb-2">תאריך מועדף למשלוח</label>
+                    <input type="date" id="preferred-date" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                </div>
+                <div class="mb-6">
+                    <label for="comments" class="block text-sm font-medium text-gray-700 mb-2">הערות נוספות (אופציונלי)</label>
+                    <textarea id="comments" rows="3" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
+                </div>
+                <div class="flex justify-between">
+                    <button type="button" id="prev-step-2" class="py-3 px-6 text-primary rounded-lg font-bold transition-colors duration-200 hover:bg-gray-200">חזור</button>
+                    <button type="button" id="next-step-2" class="py-3 px-6 bg-primary text-white rounded-lg font-bold transition-colors duration-200 hover:bg-secondary">המשך</button>
+                </div>
+            </div>
+
+            <!-- שלב 3: סיכום ואישור -->
+            <div id="step-3" class="step hidden">
+                <h2 class="text-xl font-semibold text-text-gray mb-4">סיכום הזמנה</h2>
+                <div class="bg-gray-100 p-6 rounded-lg mb-6">
+                    <div class="flex justify-between py-2 border-b border-gray-300">
+                        <span class="text-gray-600">פרויקט:</span>
+                        <span id="summary-project" class="font-semibold text-text-gray"></span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-300">
+                        <span class="text-gray-600">סוג מכולה:</span>
+                        <span id="summary-container" class="font-semibold text-text-gray"></span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-300">
+                        <span class="text-gray-600">סוג פעולה:</span>
+                        <span id="summary-action" class="font-semibold text-text-gray"></span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-300">
+                        <span class="text-gray-600">תאריך מועדף:</span>
+                        <span id="summary-date" class="font-semibold text-text-gray"></span>
+                    </div>
+                    <div class="py-2">
+                        <span class="text-gray-600 block">הערות:</span>
+                        <span id="summary-comments" class="mt-1 font-normal text-text-gray italic"></span>
+                    </div>
+                </div>
+                <div class="flex justify-between">
+                    <button type="button" id="prev-step-3" class="py-3 px-6 text-primary rounded-lg font-bold transition-colors duration-200 hover:bg-gray-200">חזור</button>
+                    <button type="button" id="submit-order" class="py-3 px-6 bg-primary text-white rounded-lg font-bold transition-colors duration-200 hover:bg-secondary">אשר ושליחת הזמנה</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- JavaScript לטיפול בשלבים -->
+    <script>
+        const state = {
+            currentStep: 1,
+            orderData: {
+                project: '',
+                containerType: '',
+                actionType: '',
+                address: '',
+                date: '',
+                comments: ''
+            }
+        };
+
+        const steps = document.querySelectorAll('.step');
+        const stepIcons = document.querySelectorAll('[id^="step-"]');
+
+        function updateUI() {
+            steps.forEach((step, index) => {
+                step.classList.toggle('hidden', index + 1 !== state.currentStep);
+            });
+            stepIcons.forEach((icon, index) => {
+                icon.classList.remove('step-active-icon', 'step-inactive-icon');
+                icon.classList.add(index + 1 === state.currentStep ? 'step-active-icon' : 'step-inactive-icon');
+            });
+        }
+
+        function setupListeners() {
+            // טיפול בכפתורי פעולה
+            document.querySelectorAll('.action-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    document.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('border-primary', 'border-2'));
+                    e.currentTarget.classList.add('border-primary', 'border-2');
+                    state.orderData.actionType = e.currentTarget.dataset.action;
+                });
+            });
+
+            // ניווט בין שלבים
+            document.getElementById('next-step-1').addEventListener('click', () => {
+                const project = document.getElementById('project-select').value;
+                const containerType = document.querySelector('input[name="container-type"]:checked').value;
+                const actionType = state.orderData.actionType;
+
+                if (!project || !containerType || !actionType) {
+                    alert('אנא מלא את כל הפרטים לפני ההמשך.');
+                    return;
+                }
+                
+                // כאן תהיה הלוגיקה שתמשוך את הכתובת הנכונה מהנתונים
+                state.orderData.project = document.getElementById('project-select').options[document.getElementById('project-select').selectedIndex].text;
+                state.orderData.containerType = containerType === '8' ? 'מכולה 8 קוב' : 'מכולה 12 קוב';
+                state.orderData.address = 'כתובת פרויקט לדוגמא'; // זה יתמלא אוטומטית מהנתונים
+                
+                state.currentStep = 2;
+                updateUI();
+                document.getElementById('delivery-address').value = state.orderData.address;
+            });
+
+            document.getElementById('prev-step-2').addEventListener('click', () => {
+                state.currentStep = 1;
+                updateUI();
+            });
+
+            document.getElementById('next-step-2').addEventListener('click', () => {
+                const date = document.getElementById('preferred-date').value;
+                if (!date) {
+                    alert('אנא בחר תאריך מועדף.');
+                    return;
+                }
+                state.orderData.date = date;
+                state.orderData.comments = document.getElementById('comments').value;
+
+                // עדכון סיכום
+                document.getElementById('summary-project').textContent = state.orderData.project;
+                document.getElementById('summary-container').textContent = state.orderData.containerType;
+                document.getElementById('summary-action').textContent = state.orderData.actionType;
+                document.getElementById('summary-date').textContent = new Date(state.orderData.date).toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' });
+                document.getElementById('summary-comments').textContent = state.orderData.comments || 'אין הערות';
+
+                state.currentStep = 3;
+                updateUI();
+            });
+
+            document.getElementById('prev-step-3').addEventListener('click', () => {
+                state.currentStep = 2;
+                updateUI();
+            });
+
+            document.getElementById('submit-order').addEventListener('click', () => {
+                // כאן תתבצע קריאת ה-API לשליחת ההזמנה
+                console.log('שולח הזמנה:', state.orderData);
+                alert('ההזמנה נשלחה בהצלחה!');
+                // לאחר השליחה, ניתן להחזיר למסך הראשי
+                // state.currentStep = 1;
+                // updateUI();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateUI();
+            setupListeners();
+        });
+    </script>
+</body>
+</html>
