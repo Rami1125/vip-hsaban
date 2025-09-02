@@ -53,6 +53,27 @@
         .progress-bar-fill { position: absolute; height: 4px; background-color: var(--primary-color); top: 50%; transform: translateY(-50%); right: 0; z-index: 2; transition: width 0.5s ease-in-out; }
         .progress-step { width: 30px; height: 30px; border-radius: 50%; background-color: white; border: 3px solid #e5e7eb; z-index: 3; transition: all 0.4s; display:flex; align-items:center; justify-content:center; }
         .progress-step.active { border-color: var(--primary-color); background-color: var(--primary-color); color: white; }
+
+        .neon-notice-box {
+            position: fixed;
+            bottom: 6rem;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 1rem 1.5rem;
+            background-color: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(5px);
+            color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color), inset 0 0 5px rgba(46, 139, 87, 0.5);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s, transform 0.5s;
+            transform: translateX(-50%) translateY(20px);
+        }
+        .neon-notice-box.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
     </style>
 </head>
 <body class="flex justify-center items-center h-screen bg-gray-200">
@@ -122,15 +143,14 @@
 
         const phone = state.client['טלפון_לקוח'];
         
-        // FIX: Using the correct action names 'listOrders' and 'getOrdersByPhone'
-        const [newOrders, trackedContainers, projects] = await Promise.all([
-            api(VIP_API_URL, 'listOrders', { phone }), // Corrected from 'listNewOrders'
-            api(TRACKING_API_URL, 'getOrdersByPhone', { phone }), // Corrected from 'getActiveContainers'
+        const [newOrders, activeContainers, projects] = await Promise.all([
+            api(VIP_API_URL, 'listNewOrders', { phone }),
+            api(TRACKING_API_URL, 'getActiveContainers', { phone }),
             api(VIP_API_URL, 'getProjects', { phone })
         ]);
         
         state.newOrders = newOrders || [];
-        state.activeContainers = (trackedContainers || []).map(processContainerData);
+        state.activeContainers = (activeContainers || []).map(processContainerData);
         state.projects = projects || [];
 
         setupEventListeners();
@@ -163,39 +183,61 @@
         if (renderer) renderer();
     }
     
+    // --- PAGE RENDERERS ---
     function renderHomeScreen() { /* ... Same logic as before ... */ }
     function renderContainersScreen() {
         const contentDiv = document.getElementById('content');
-        const pendingContainerOrders = state.newOrders.filter(o => o.orderType === 'container' && o.סטטוס === 'ממתין לאישור');
-        const activeTrackedContainers = state.activeContainers.filter(c => c['סטטוס'] !== 'סגור');
-
         contentDiv.innerHTML = `
             <div class="p-2 space-y-6 slide-up">
                 <div>
-                    <h2 class="text-xl font-bold p-2 flex items-center"><i class="fas fa-truck text-green-600 mr-3"></i>מכולות בשטח (${activeTrackedContainers.length})</h2>
+                    <h2 class="text-xl font-bold p-2 flex items-center"><i class="fas fa-truck text-green-600 mr-3"></i>מכולות בשטח (${state.activeContainers.length})</h2>
                     <div class="space-y-3">
-                        ${activeTrackedContainers.length > 0 ? 
-                            activeTrackedContainers.map(activeContainerCard).join('') : 
+                        ${state.activeContainers.length > 0 ? 
+                            state.activeContainers.map(activeContainerCard).join('') : 
                             '<div class="bg-white p-4 rounded-lg text-center text-gray-500">אין כרגע מכולות פעילות בשטח.</div>'}
                     </div>
                 </div>
                 <div>
-                    <h2 class="text-xl font-bold p-2 flex items-center"><i class="fas fa-hourglass-half text-yellow-500 mr-3"></i>הזמנות בהמתנה (${pendingContainerOrders.length})</h2>
+                    <h2 class="text-xl font-bold p-2 flex items-center"><i class="fas fa-hourglass-half text-yellow-500 mr-3"></i>הזמנות בהמתנה (${state.newOrders.length})</h2>
                     <div class="space-y-3">
-                        ${pendingContainerOrders.length > 0 ?
-                            pendingContainerOrders.map(pendingOrderCard).join('') :
+                        ${state.newOrders.length > 0 ?
+                            state.newOrders.map(pendingOrderCard).join('') :
                             '<div class="bg-white p-4 rounded-lg text-center text-gray-500">אין הזמנות חדשות שממתינות לאישור.</div>'}
                     </div>
                 </div>
             </div>`;
         
-        activeTrackedContainers.forEach(container => {
+        state.activeContainers.forEach(container => {
             const containerNumber = container['מספר מכולה ירדה'];
             const timerEl = document.getElementById(`timer-${containerNumber}`);
             if (timerEl) startCountdown(timerEl, container['תאריך הזמנה']);
         });
-     }
-    function activeContainerCard(container) { /* ... Same logic as before ... */ }
+    }
+
+    function activeContainerCard(container) {
+        const overdueClass = container.isOverdue ? 'overdue-alert' : '';
+        const timerPercentage = Math.max(0, (container.remainingDays / 10) * 100);
+        const containerNumber = container['מספר מכולה ירדה'];
+        const address = container['כתובת'];
+        const orderDate = container['תאריך הזמנה'];
+
+        return `
+            <div class="bg-white p-4 rounded-lg shadow-md ${overdueClass}">
+                <div class="flex justify-between items-start">
+                    <div><p class="font-bold text-lg">מכולה ${containerNumber || 'N/A'}</p><p class="text-sm text-gray-600">${address || 'כתובת לא צוינה'}</p></div>
+                    <div class="text-left"><p class="text-sm font-semibold text-green-600">הזמנה מאושרת</p><p class="text-xs text-gray-500">מתאריך: ${dayjs(orderDate).format('DD/MM/YY')}</p></div>
+                </div>
+                <div class="mt-4">
+                     <div class="flex justify-between text-xs mb-1">
+                        <span>${container.isOverdue ? 'ימים בחריגה:' : 'ימי שכירות שנותרו:'}</span>
+                        <span class="font-bold">${container.isOverdue ? container.daysOnSite - 10 : container.remainingDays}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5"><div class="${container.isOverdue ? 'bg-red-500' : 'bg-green-500'} h-2.5 rounded-full" style="width: ${container.isOverdue ? 100 : timerPercentage}%"></div></div>
+                    <div id="timer-${containerNumber}" class="text-center text-xs text-gray-500 mt-2">טוען טיימר...</div>
+                </div>
+            </div>`;
+    }
+    
     function pendingOrderCard(order) { /* ... same as before ... */ }
     function startCountdown(element, startDate) { /* ... same as before ... */ }
     
