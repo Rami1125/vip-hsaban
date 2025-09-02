@@ -53,27 +53,6 @@
         .progress-bar-fill { position: absolute; height: 4px; background-color: var(--primary-color); top: 50%; transform: translateY(-50%); right: 0; z-index: 2; transition: width 0.5s ease-in-out; }
         .progress-step { width: 30px; height: 30px; border-radius: 50%; background-color: white; border: 3px solid #e5e7eb; z-index: 3; transition: all 0.4s; display:flex; align-items:center; justify-content:center; }
         .progress-step.active { border-color: var(--primary-color); background-color: var(--primary-color); color: white; }
-
-        .neon-notice-box {
-            position: fixed;
-            bottom: 6rem;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 1rem 1.5rem;
-            background-color: rgba(17, 24, 39, 0.8);
-            backdrop-filter: blur(5px);
-            color: white;
-            border-radius: 0.75rem;
-            box-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color), inset 0 0 5px rgba(46, 139, 87, 0.5);
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.5s, transform 0.5s;
-            transform: translateX(-50%) translateY(20px);
-        }
-        .neon-notice-box.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
     </style>
 </head>
 <body class="flex justify-center items-center h-screen bg-gray-200">
@@ -111,13 +90,12 @@
 
     <script>
     // --- STATE & CONFIG ---
-    let state = { client: null, projects: [], currentScreen: 'login', newOrders: [], activeContainers: [], timers: {}, newOrderForm: { step: 1, data: {} } };
-    const VIP_API_URL = 'https://script.google.com/macros/s/AKfycbwUDlGJfoCZFuhPVdHp-V10W6TAVzANEdkk1r7sYNukCo2pnZtcTMgTb92EU0VUxdOS/exec';
-    const TRACKING_API_URL = 'https://script.google.com/macros/s/AKfycbxiS3wXwXCyh8xM1EdTiwXy0T-UyBRQgfrnRRis531lTxmgtJIGawfsPeetX5nVJW3V/exec';
+    let state = { client: null, projects: [], newOrders: [], activeContainers: [], timers: {} };
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwWrkMs1Ae3U8JpS1FIxvfmk8chACQfEb2ssaedSUD4G6SYlt1Z3_RJ0vEqk9RVtET9/exec';
     
     // --- API & UTILITIES ---
-    async function api(baseUrl, action, params = {}) {
-        const url = new URL(baseUrl);
+    async function api(action, params = {}) {
+        const url = new URL(GAS_WEB_APP_URL);
         url.searchParams.set('action', action);
         Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
         try {
@@ -134,7 +112,7 @@
     }
     function closeModal(modalId) { document.getElementById(modalId)?.remove(); }
 
-    // --- CORE APP LOGIC ---
+    // --- CORE APP LOGIC (UPDATED) ---
     async function initializeMainApp() {
         document.getElementById('client-name').textContent = state.client['שם_לקוח'];
         document.getElementById('login-screen').classList.add('hidden');
@@ -142,11 +120,12 @@
         document.getElementById('main-app').classList.add('fade-in', 'flex');
 
         const phone = state.client['טלפון_לקוח'];
-        
+
+        // Call the new, simplified actions
         const [newOrders, activeContainers, projects] = await Promise.all([
-            api(VIP_API_URL, 'listNewOrders', { phone }),
-            api(TRACKING_API_URL, 'getActiveContainers', { phone }),
-            api(VIP_API_URL, 'getProjects', { phone })
+            api('listNewOrders', { phone }),
+            api('getActiveContainers', { phone }),
+            api('getProjects', { phone })
         ]);
         
         state.newOrders = newOrders || [];
@@ -156,7 +135,7 @@
         setupEventListeners();
         updateClock();
         setInterval(updateClock, 1000);
-        navigateTo('home');
+        navigateTo('containers'); // Go directly to the containers page after login
     }
 
     function processContainerData(container) {
@@ -167,7 +146,7 @@
         const isConfirmed = String(container['תעודה']).startsWith('671');
         return { ...container, daysOnSite, isOverdue, remainingDays, isConfirmed };
     }
-
+    
     function setupEventListeners() {
         document.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', () => navigateTo(btn.dataset.screen)));
         document.getElementById('new-order-choice-btn').addEventListener('click', showNewOrderChoice);
@@ -184,7 +163,6 @@
     }
     
     // --- PAGE RENDERERS ---
-    function renderHomeScreen() { /* ... Same logic as before ... */ }
     function renderContainersScreen() {
         const contentDiv = document.getElementById('content');
         contentDiv.innerHTML = `
@@ -217,6 +195,7 @@
     function activeContainerCard(container) {
         const overdueClass = container.isOverdue ? 'overdue-alert' : '';
         const timerPercentage = Math.max(0, (container.remainingDays / 10) * 100);
+        
         const containerNumber = container['מספר מכולה ירדה'];
         const address = container['כתובת'];
         const orderDate = container['תאריך הזמנה'];
@@ -224,8 +203,14 @@
         return `
             <div class="bg-white p-4 rounded-lg shadow-md ${overdueClass}">
                 <div class="flex justify-between items-start">
-                    <div><p class="font-bold text-lg">מכולה ${containerNumber || 'N/A'}</p><p class="text-sm text-gray-600">${address || 'כתובת לא צוינה'}</p></div>
-                    <div class="text-left"><p class="text-sm font-semibold text-green-600">הזמנה מאושרת</p><p class="text-xs text-gray-500">מתאריך: ${dayjs(orderDate).format('DD/MM/YY')}</p></div>
+                    <div>
+                        <p class="font-bold text-lg">מכולה ${containerNumber || 'N/A'}</p>
+                        <p class="text-sm text-gray-600">${address || 'כתובת לא צוינה'}</p>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-sm font-semibold text-green-600">הזמנה מאושרת</p>
+                        <p class="text-xs text-gray-500">מתאריך: ${dayjs(orderDate).format('DD/MM/YY')}</p>
+                    </div>
                 </div>
                 <div class="mt-4">
                      <div class="flex justify-between text-xs mb-1">
@@ -237,8 +222,26 @@
                 </div>
             </div>`;
     }
-    
-    function pendingOrderCard(order) { /* ... same as before ... */ }
+
+    function pendingOrderCard(order) {
+        let itemsDesc = '';
+        try {
+            const items = JSON.parse(order.פריטים);
+            itemsDesc = items.map(item => `${item.type || ''} (${item.action || ''})`).join(', ');
+        } catch(e) { itemsDesc = 'פירוט לא זמין'; }
+        return `
+            <div class="bg-white p-4 rounded-lg shadow-md border-l-4 border-yellow-400 opacity-80">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="font-bold text-lg">${order.פרויקט}</p>
+                        <p class="text-sm text-gray-600">${order.כתובת}</p>
+                    </div>
+                    <span class="text-xs px-2 py-1 bg-yellow-400 text-white rounded-full">${order.סטטוס}</span>
+                </div>
+                <div class="text-sm text-gray-500 mt-2"><strong>פירוט:</strong> ${itemsDesc}</div>
+            </div>`;
+    }
+
     function startCountdown(element, startDate) { /* ... same as before ... */ }
     
     // --- FORM LOGIC ---
@@ -259,14 +262,14 @@
             project: state.newOrderForm.data['פרויקט'],
             address: state.newOrderForm.data['כתובת'],
         };
-        const newOrder = await api(VIP_API_URL, 'createOrder', { ...orderData, orderType: 'container' });
+        const newOrder = await api(GAS_WEB_APP_URL, 'createOrder', { ...orderData, orderType: 'container' });
         if (newOrder) {
             closeModal('order-modal');
             state.newOrders.unshift(newOrder);
             navigateTo('containers');
         }
     }
-
+    
     function updateClock() {
         dayjs.locale('he');
         const clockElement = document.getElementById('live-clock');
@@ -281,7 +284,7 @@
                 loginBtn.disabled = true;
                 loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> מאמת פרטים...';
                 
-                state.client = await api(VIP_API_URL, 'auth', { 
+                state.client = await api('auth', { 
                     phone: document.getElementById('phone').value,
                     password: document.getElementById('password').value
                 });
