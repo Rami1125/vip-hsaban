@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIP Portal | ח. סבן בע"מ</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/locale/he.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="https://img.icons8.com/plasticine/100/000000/truck.png">
+
+    <style>
+        :root {
+            --primary-color: #2E8B57;
+            --background-color: #f8f9fa;
+        }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: var(--background-color);
+        }
+        .container-bg {
+            background-image: url('https://placehold.co/1920x1080/E0E0E0/ffffff?text=');
+            background-size: cover;
+            background-position: center;
+        }
+        .container-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: -1;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div id="app-container" class="min-h-screen flex items-center justify-center p-4">
+        <!-- The content will be rendered here dynamically -->
+    </div>
+
+    <script>
+        // API Configuration
+        const API_URL = 'https://script.google.com/macros/s/AKfycbzDVoU0Mi5uJ9ULF17GlO88d1Bd6iIo_plpw2oRSGLZuCMiuApQXQYK8geRUahVTBdv/exec';
+        
+        // --- State Management ---
+        const state = {
+            client: null,
+            dashboard: null,
+            view: 'login', // login, dashboard, orderDetails
+            selectedOrder: null
+        };
+        
+        // --- API Calls ---
+        async function api(action, params = {}) {
+            try {
+                const url = new URL(API_URL);
+                url.searchParams.append('action', action);
+                Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    return data.data;
+                } else {
+                    Swal.fire({
+                        title: 'שגיאה',
+                        text: data.message || 'אירעה שגיאה בתקשורת עם השרת.',
+                        icon: 'error',
+                        confirmButtonText: 'אישור'
+                    });
+                    return null;
+                }
+            } catch (error) {
+                console.error('API call failed:', error);
+                Swal.fire({
+                    title: 'שגיאה',
+                    text: 'נכשל להתחבר לשרת. אנא נסה שוב מאוחר יותר.',
+                    icon: 'error',
+                    confirmButtonText: 'אישור'
+                });
+                return null;
+            }
+        }
+        
+        // --- UI Rendering ---
+        const appContainer = document.getElementById('app-container');
+
+        function render() {
+            switch (state.view) {
+                case 'login':
+                    appContainer.innerHTML = getLoginHtml();
+                    setupLoginListeners();
+                    break;
+                case 'dashboard':
+                    appContainer.innerHTML = getDashboardHtml();
+                    setupDashboardListeners();
+                    break;
+                case 'orderDetails':
+                    appContainer.innerHTML = getOrderDetailsHtml(state.selectedOrder);
+                    setupOrderDetailsListeners();
+                    break;
+            }
+        }
+        
+        function getLoginHtml() {
+            return `
+                <div class="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-2xl border-2 border-gray-100 transform transition-all duration-500 hover:scale-105">
+                    <div class="flex flex-col items-center">
+                        <img src="${state.client?.avatar_url || 'https://img.icons8.com/plasticine/100/000000/truck.png'}" alt="Logo" class="w-24 h-24 mb-4">
+                        <h2 class="text-3xl font-bold text-center text-gray-900">כניסה למערכת</h2>
+                    </div>
+                    <form class="space-y-4">
+                        <div class="relative">
+                            <i class="fas fa-user-circle absolute top-3 right-3 text-gray-400"></i>
+                            <input type="tel" id="phone" dir="ltr" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition" placeholder="מספר טלפון">
+                        </div>
+                        <div class="relative">
+                            <i class="fas fa-lock absolute top-3 right-3 text-gray-400"></i>
+                            <input type="password" id="password" dir="ltr" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition" placeholder="סיסמה">
+                        </div>
+                        <button type="button" id="login-btn" class="w-full py-3 px-4 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50 transition transform hover:-translate-y-1 shadow-lg">
+                            כניסה
+                        </button>
+                    </form>
+                </div>
+            `;
+        }
+
+        function setupLoginListeners() {
+            const loginBtn = document.getElementById('login-btn');
+            if (loginBtn) {
+                loginBtn.addEventListener('click', async () => {
+                    loginBtn.disabled = true;
+                    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> מאמת פרטים...';
+                    
+                    const phone = document.getElementById('phone').value;
+                    const password = document.getElementById('password').value;
+
+                    // Trim leading '972' if present for consistency
+                    const normalizedPhone = phone.startsWith('972') ? phone.substring(3) : phone;
+
+                    state.client = await api('auth', { 
+                        phone: normalizedPhone,
+                        password: password
+                    });
+
+                    if (state.client) {
+                        state.view = 'dashboard';
+                        state.dashboard = await api('getDashboardData');
+                        render();
+                    } else {
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = 'כניסה';
+                    }
+                });
+            }
+        }
+        
+        function getDashboardHtml() {
+            if (!state.dashboard) {
+                return `<div class="text-center text-gray-500">טוען נתונים...</div>`;
+            }
+
+            const { open_containers, expired_containers, client_orders } = state.dashboard;
+            
+            return `
+                <div class="w-full max-w-4xl mx-auto p-4 space-y-8">
+                    <!-- Top Bar & Clock -->
+                    <div class="flex justify-between items-center py-4 border-b-2 border-gray-200">
+                        <h1 class="text-2xl font-bold text-gray-900">ברוכים הבאים, ${state.client?.שם_לקוח}</h1>
+                        <span id="live-clock" class="text-lg font-light text-gray-600"></span>
+                    </div>
+
+                    <!-- Dashboard Summary Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex items-center justify-between transition-transform duration-300 hover:scale-105 hover:shadow-xl">
+                            <div>
+                                <p class="text-gray-500">מכולות פעילות</p>
+                                <p class="text-4xl font-bold text-green-600">${open_containers}</p>
+                            </div>
+                            <i class="fas fa-truck-container text-5xl text-gray-300"></i>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex items-center justify-between transition-transform duration-300 hover:scale-105 hover:shadow-xl">
+                            <div>
+                                <p class="text-gray-500">מכולות חורגות</p>
+                                <p class="text-4xl font-bold text-red-600">${expired_containers}</p>
+                            </div>
+                            <i class="fas fa-exclamation-triangle text-5xl text-gray-300"></i>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex items-center justify-between transition-transform duration-300 hover:scale-105 hover:shadow-xl">
+                            <div>
+                                <p class="text-gray-500">הזמנות פתוחות</p>
+                                <p class="text-4xl font-bold text-blue-600">${client_orders.filter(o => o.סטטוס === 'פתוח').length}</p>
+                            </div>
+                            <i class="fas fa-clipboard-list text-5xl text-gray-300"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- My Orders Section -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold text-gray-900">הזמנות קודמות</h2>
+                            <button id="logout-btn" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+                                <i class="fas fa-sign-out-alt ml-2"></i> יציאה
+                            </button>
+                        </div>
+                        ${renderOrdersList(client_orders)}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function setupDashboardListeners() {
+            const logoutBtn = document.getElementById('logout-btn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', () => {
+                    state.client = null;
+                    state.dashboard = null;
+                    state.view = 'login';
+                    render();
+                });
+            }
+            // Add click listeners to order items
+            document.querySelectorAll('.order-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const orderId = e.currentTarget.dataset.id;
+                    state.selectedOrder = state.dashboard.client_orders.find(o => o.תעודה === orderId);
+                    if (state.selectedOrder) {
+                        state.view = 'orderDetails';
+                        render();
+                    }
+                });
+            });
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        function renderOrdersList(orders) {
+            if (!orders || orders.length === 0) {
+                return '<p class="text-gray-500 text-center">לא נמצאו הזמנות.</p>';
+            }
+            
+            return `
+                <ul class="divide-y divide-gray-200">
+                    ${orders.map(order => `
+                        <li class="order-item p-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer rounded-lg" data-id="${order.תעודה}">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-700">הזמנה #${order.תעודה}</p>
+                                    <p class="text-xs text-gray-400">${dayjs(order.created_at).format('DD/MM/YYYY')}</p>
+                                </div>
+                                <div>
+                                    <span class="px-2 py-1 inline-block text-xs font-medium rounded-full ${getStatusClass(order.סטטוס)}">
+                                        ${order.סטטוס}
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+        }
+
+        function getStatusClass(status) {
+            switch (status) {
+                case 'פתוח': return 'bg-blue-100 text-blue-800';
+                case 'סגור': return 'bg-green-100 text-green-800';
+                case 'חורג': return 'bg-red-100 text-red-800 animate-pulse';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+        
+        function getOrderDetailsHtml(order) {
+            if (!order) {
+                return `<div class="text-center text-gray-500">לא נבחרה הזמנה.</div>`;
+            }
+
+            const actionType = order.סוג_פעולה;
+            let actionColorClass = 'bg-gray-200';
+            let actionTextClass = 'text-gray-800';
+            let actionIconClass = 'fas fa-truck-container';
+
+            switch (actionType) {
+                case 'הורדה':
+                    actionColorClass = 'bg-green-100';
+                    actionTextClass = 'text-green-800';
+                    actionIconClass = 'fas fa-arrow-down';
+                    break;
+                case 'החלפה':
+                    actionColorClass = 'bg-amber-100';
+                    actionTextClass = 'text-amber-800';
+                    actionIconClass = 'fas fa-sync-alt';
+                    break;
+                case 'העלאה':
+                    actionColorClass = 'bg-red-100';
+                    actionTextClass = 'text-red-800';
+                    actionIconClass = 'fas fa-arrow-up';
+                    break;
+            }
+
+            return `
+                <div class="w-full max-w-2xl mx-auto p-4 space-y-6">
+                    <button id="back-btn" class="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
+                        <i class="fas fa-arrow-right ml-2"></i> חזרה ללוח הבקרה
+                    </button>
+                    <div class="bg-white p-6 rounded-xl shadow-xl border border-gray-100">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-900">הזמנה #${order.תעודה}</h2>
+                                <p class="text-sm text-gray-500">
+                                    נוצרה בתאריך: ${dayjs(order.created_at).format('DD/MM/YYYY HH:mm')}
+                                </p>
+                            </div>
+                            <span class="px-3 py-1 text-sm font-semibold rounded-full ${actionColorClass} ${actionTextClass} flex items-center">
+                                <i class="${actionIconClass} ml-2"></i> ${actionType}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                            <div>
+                                <p class="text-sm text-gray-500">פרויקט</p>
+                                <p class="font-medium text-gray-800">${order.פרויקט || 'לא צוין'}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">כתובת</p>
+                                <p class="font-medium text-gray-800">${order.כתובת || 'לא צוין'}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">סטטוס</p>
+                                <p class="font-medium text-gray-800">
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${getStatusClass(order.סטטוס)}">
+                                        ${order.סטטוס}
+                                    </span>
+                                </p>
+                            </div>
+                            ${order.ימים_שעברו ? `
+                                <div>
+                                    <p class="text-sm text-gray-500">ימים שעברו</p>
+                                    <p class="font-medium text-gray-800">${order.ימים_שעברו}</p>
+                                </div>` : ''}
+                        </div>
+                        
+                        <div class="mt-6 border-t pt-4">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">פרטי מכולה</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-500">מספר מכולה ירדה</p>
+                                    <p class="font-medium text-gray-800">${order.מספר_מכולה_ירדה || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">מספר מכולה עלתה</p>
+                                    <p class="font-medium text-gray-800">${order.מספר_מכולה_עלתה || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">סוג מכולה</p>
+                                    <p class="font-medium text-gray-800">${order.פריטים ? JSON.parse(order.פריטים)[0]?.type : 'לא צוין'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">כמות</p>
+                                    <p class="font-medium text-gray-800">${order.פריטים ? JSON.parse(order.פריטים)[0]?.quantity : 'לא צוין'}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupOrderDetailsListeners() {
+            const backBtn = document.getElementById('back-btn');
+            if (backBtn) {
+                backBtn.addEventListener('click', () => {
+                    state.selectedOrder = null;
+                    state.view = 'dashboard';
+                    render();
+                });
+            }
+        }
+
+        function updateClock() {
+            dayjs.locale('he');
+            const clockElement = document.getElementById('live-clock');
+            if (clockElement) clockElement.textContent = dayjs().format('dddd, D MMMM YYYY | HH:mm:ss');
+        }
+
+        // --- APP START ---
+        document.addEventListener('DOMContentLoaded', () => {
+            render();
+            // This is just to test the dashboard view without login
+            // state.view = 'dashboard';
+            // state.client = { שם_לקוח: 'אורניל-אשר לוי' };
+            // state.dashboard = {
+            //     open_containers: 5,
+            //     expired_containers: 1,
+            //     client_orders: [
+            //         { תעודה: 'ORD-1001', סטטוס: 'פתוח', created_at: '2025-08-31T19:13:52.284Z', סוג_פעולה: 'הורדה', פרויקט: 'אלנבי', כתובת: 'ויצמן 4, רעננה', ימים_שעברו: 5 },
+            //         { תעודה: 'ORD-1002', סטטוס: 'סגור', created_at: '2025-08-30T19:13:52.284Z', סוג_פעולה: 'החלפה', פרויקט: 'אורניל', כתובת: 'הסתדרות 29, רעננה', ימים_שעברו: 6 },
+            //         { תעודה: 'ORD-1003', סטטוס: 'חורג', created_at: '2025-08-29T19:13:52.284Z', סוג_פעולה: 'העלאה', פרויקט: 'בנין 100', כתובת: 'הרצל 5, תל אביב', ימים_שעברו: 7 },
+            //     ]
+            // };
+            // render();
+        });
+    </script>
+</body>
+</html>
