@@ -365,14 +365,17 @@
             async api(action, params = {}) {
                 try {
                     const url = new URL(API_URL);
+                    
+                    // Add the action to the params object that will be sent in the body
                     params.action = action;
-                    Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
 
                     const response = await fetch(url.toString(), {
-                        method: 'GET',
+                        method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
+                            // Using text/plain can avoid CORS preflight issues with Google Apps Script
+                            'Content-Type': 'text/plain;charset=utf-8',
                         },
+                        body: JSON.stringify(params),
                     });
 
                     if (!response.ok) {
@@ -411,7 +414,6 @@
                         this.renderUserInfo();
                         this.renderActiveOrders();
                         this.navigateTo('main-screen');
-                        this.updateView();
                     } else {
                         throw new Error('טלפון או סיסמה לא נכונים');
                     }
