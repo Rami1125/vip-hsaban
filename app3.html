@@ -321,6 +321,37 @@
         dayjs.extend(dayjs_plugin_relativeTime);
 
         const API_URL = 'https://script.google.com/macros/s/AKfycbzmnyD48gcii6f-YFfSyG_DiHmCnhpk2_EgfwZRtDnpEwIcNJ5BIBCXd15mHtVbcX7Z/exec';
+        
+        // --- כלי עזר לתיעוד (לוגים) ---
+        // כלי זה מאפשר לנו להדפיס הודעות לקונסול בצורה מסודרת
+        // כדי שנוכל לעקוב אחר פעולת האפליקציה ולמצוא בעיות בקלות
+        const Logger = {
+            _isoTimestamp: () => new Date().toISOString(),
+            debug(message, ...args) { console.debug(`[${this._isoTimestamp()}] DEBUG: ${message}`, ...args); },
+            info(message, ...args) { console.info(`[${this._isoTimestamp()}] INFO: ${message}`, ...args); },
+            warn(message, ...args) { console.warn(`[${this._isoTimestamp()}] WARN: ${message}`, ...args); },
+            error(message, ...args) { console.error(`[${this._isoTimestamp()}] ERROR: ${message}`, ...args); }
+        };
+
+        // --- שירות ניהול אימות משתמש ---
+        // מרכז את כל הפעולות שקשורות להתחברות המשתמש
+        const AuthService = {
+            getCredentials() {
+                const phone = document.getElementById('phone-input').value;
+                const password = document.getElementById('password-input').value;
+                Logger.debug('Credentials retrieved from DOM', { phone });
+                return { phone, password };
+            },
+            saveLastPhone(phone) {
+                Logger.debug(`Saving last used phone: ${phone}`);
+                localStorage.setItem('last_phone', phone);
+            },
+            getLastPhone() {
+                const phone = localStorage.getItem('last_phone');
+                Logger.debug(`Retrieved last used phone from localStorage: ${phone}`);
+                return phone;
+            }
+        };
 
         const App = {
             state: {
@@ -336,17 +367,19 @@
                     notes: '',
                 },
             },
+            syncInterval: null, // ישמש לשמירת מזהה האינטרוול של הסנכרון ברקע
             
             init() {
+                Logger.info("App Initializing...");
                 this.bindEvents();
                 this.navigateTo('login-screen');
                 this.prefillLogin();
+                Logger.info("App Initialized successfully.");
             },
             
             prefillLogin() {
                 const phoneInput = document.getElementById('phone-input');
-                const passwordInput = document.getElementById('password-input');
-                const lastPhone = localStorage.getItem('last_phone');
+                const lastPhone = AuthService.getLastPhone();
                 if (lastPhone) {
                     phoneInput.value = lastPhone;
                 }
@@ -363,33 +396,38 @@
             },
 
             async api(action, params = {}) {
+                Logger.info(`API Call Started: ${action}`, params);
                 try {
                     const url = new URL(API_URL);
-                    
-                    // Add the action to the params object that will be sent in the body
-                    params.action = action;
+                    // FIX: The error "פעולה לא חוקית" (Invalid action) suggests the Google Apps Script
+                    // backend expects the action name as a URL parameter to correctly route the request.
+                    url.searchParams.append('action', action);
 
                     const response = await fetch(url.toString(), {
                         method: 'POST',
                         headers: {
-                            // Using text/plain can avoid CORS preflight issues with Google Apps Script
                             'Content-Type': 'text/plain;charset=utf-8',
                         },
                         body: JSON.stringify(params),
                     });
 
                     if (!response.ok) {
-                        throw new Error('שגיאת שרת: ' + response.status);
+                        throw new Error(`שגיאת רשת: ${response.status} ${response.statusText}`);
                     }
+                    
                     const data = await response.json();
+                    
                     if (!data.success) {
-                        throw new Error(data.error || 'שגיאה לא ידועה');
+                        throw new Error(data.error || 'השרת החזיר שגיאה לא ידועה');
                     }
+                    
+                    Logger.info(`API Call Succeeded: ${action}`, data);
                     return data;
                 } catch (error) {
+                    Logger.error(`API Call Failed: ${action}`, error);
                     Swal.fire({
                         icon: 'error',
-                        title: 'שגיאה',
+                        title: 'שגיאה בתקשורת',
                         text: `אירעה שגיאה: ${error.message}`,
                         confirmButtonText: 'אישור'
                     });
@@ -398,35 +436,79 @@
             },
             
             async login() {
-                const phone = document.getElementById('phone-input').value;
-                const password = document.getElementById('password-input').value;
                 const loginBtn = document.getElementById('login-btn');
+                const { phone, password } = AuthService.getCredentials();
+
+                if (!phone || !password) {
+                    Swal.fire('פרטים חסרים', 'נא למלא מספר טלפון וסיסמה', 'warning');
+                    return;
+                }
 
                 this.showLoading(loginBtn);
+                Logger.info(`Login attempt for phone: ${phone}`);
+
                 try {
-                    const data = await this.api('getUserData', { phone: phone, password: password });
+                    const data = await this.api('getUserData', { phone, password });
                     if (data && data.user) {
+                        Logger.info('Login successful', data.user);
                         this.state.user = data.user;
                         this.state.projects = data.projects;
                         this.state.orders = data.orders;
-                        localStorage.setItem('last_phone', phone);
-                        this.fetchContainerStatus();
-                        this.renderUserInfo();
-                        this.renderActiveOrders();
+                        AuthService.saveLastPhone(phone);
+                        
                         this.navigateTo('main-screen');
+                        await this.syncData(); // סנכרון ראשוני של המידע
+                        this.startBackgroundSync(); // הפעלת סנכרון ברקע
                     } else {
-                        throw new Error('טלפון או סיסמה לא נכונים');
+                        // השגיאה תוצג על ידי פונקציית ה-API
+                        Logger.warn('Login failed: Invalid credentials or user not found');
                     }
                 } catch (error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'שגיאת התחברות',
-                        text: `אירעה שגיאה: ${error.message}`,
-                        confirmButtonText: 'אישור'
-                    });
+                    Logger.error('An unexpected error occurred during login', error);
                 } finally {
                     this.hideLoading(loginBtn, 'התחבר למערכת');
                 }
+            },
+            
+            // --- פונקציות סנכרון ועדכון נתונים ---
+            
+            // פונקציה מרכזית לסנכרון כלל הנתונים מהשרת
+            async syncData() {
+                Logger.info('Starting data synchronization...');
+                if(!this.state.user) {
+                    Logger.warn('Cannot sync data, no user is logged in.');
+                    return;
+                }
+                await this.fetchContainerStatus();
+                // ניתן להוסיף כאן קריאות נוספות לעדכון נתונים בעתיד
+                this.updateDashboardUI();
+                Logger.info('Data synchronization finished.');
+            },
+
+            // מתחיל סנכרון תקופתי ברקע
+            startBackgroundSync() {
+                Logger.info('Starting background data sync every 5 minutes.');
+                if (this.syncInterval) clearInterval(this.syncInterval); // מניעת אינטרוולים כפולים
+                this.syncInterval = setInterval(() => {
+                    Logger.info('Executing scheduled background sync...');
+                    this.syncData();
+                }, 300000); // 300000 אלפיות שנייה = 5 דקות
+            },
+
+            // מפסיק את הסנכרון ברקע (חשוב בהתנתקות)
+            stopBackgroundSync() {
+                Logger.info('Stopping background data sync.');
+                if (this.syncInterval) {
+                    clearInterval(this.syncInterval);
+                    this.syncInterval = null;
+                }
+            },
+
+            // מרענן את כל הרכיבים במסך הראשי
+            updateDashboardUI() {
+                Logger.debug('Updating all dashboard UI components.');
+                this.renderUserInfo();
+                this.renderActiveOrders();
             },
 
             async fetchContainerStatus() {
@@ -476,70 +558,65 @@
             },
 
             navigateTo(screenId) {
+                Logger.debug(`Navigating to screen: ${screenId}`);
                 document.querySelectorAll('.screen').forEach(screen => {
                     screen.classList.add('hidden');
                 });
                 document.getElementById(screenId).classList.remove('hidden');
 
-                if (screenId === 'main-screen') {
+                const mainScreenSections = [
+                    'dashboard-content', 'order-wizard', 'digital-store-content', 
+                    'history-content', 'faqs-content', 'chat-content'
+                ];
+
+                if (screenId === 'main-screen' || mainScreenSections.includes(screenId)) {
                     document.querySelectorAll('#main-screen > div').forEach(section => section.classList.add('hidden'));
-                    document.getElementById('dashboard-content').classList.remove('hidden');
-                }
-                
-                if (screenId === 'dashboard-content') {
-                    document.querySelectorAll('#main-screen > div').forEach(section => section.classList.add('hidden'));
-                    document.getElementById('dashboard-content').classList.remove('hidden');
-                    this.renderActiveOrders();
-                }
-                if (screenId === 'order-wizard') {
-                    document.querySelectorAll('#main-screen > div').forEach(section => section.classList.add('hidden'));
-                    document.getElementById('order-wizard').classList.remove('hidden');
-                    this.renderProjectsForOrder();
-                }
-                 if (screenId === 'digital-store-content') {
-                    document.querySelectorAll('#main-screen > div').forEach(section => section.classList.add('hidden'));
-                    document.getElementById('digital-store-content').classList.remove('hidden');
-                    this.fetchCatalog();
-                }
-                if (screenId === 'history-content') {
-                    document.querySelectorAll('#main-screen > div').forEach(section => section.classList.add('hidden'));
-                    document.getElementById('history-content').classList.remove('hidden');
-                    this.renderOrderHistory();
-                }
-                if (screenId === 'faqs-content') {
-                    document.querySelectorAll('#main-screen > div').forEach(section => section.classList.add('hidden'));
-                    document.getElementById('faqs-content').classList.remove('hidden');
-                    this.renderFAQs();
-                }
-                if (screenId === 'chat-content') {
-                    document.querySelectorAll('#main-screen > div').forEach(section => section.classList.add('hidden'));
-                    document.getElementById('chat-content').classList.remove('hidden');
+                    
+                    const targetSection = mainScreenSections.includes(screenId) ? screenId : 'dashboard-content';
+                    document.getElementById(targetSection).classList.remove('hidden');
+                    
+                    // טעינת מידע רלוונטי למסך הנבחר
+                    switch(targetSection) {
+                        case 'dashboard-content': this.updateDashboardUI(); break;
+                        case 'order-wizard': this.renderProjectsForOrder(); break;
+                        case 'digital-store-content': this.fetchCatalog(); break;
+                        case 'history-content': this.renderOrderHistory(); break;
+                        case 'faqs-content': this.renderFAQs(); break;
+                        case 'chat-content': /* this.fetchChatMessages(); */ break;
+                    }
                 }
             },
             
             logout() {
+                Logger.info('User logging out.');
+                this.stopBackgroundSync(); // הפסקת סנכרון ברקע
                 this.state.user = null;
                 this.state.projects = [];
                 this.state.containers = [];
                 this.state.orders = [];
                 this.navigateTo('login-screen');
-                document.getElementById('phone-input').value = '';
                 document.getElementById('password-input').value = '';
+                Logger.info('Logout complete.');
             },
 
             renderUserInfo() {
                 if (this.state.user) {
+                    Logger.debug('Rendering user info', this.state.user);
                     document.getElementById('user-avatar').src = this.state.user['קישור לאווטאר'] || "https://img.icons8.com/?size=100&id=20750&format=png&color=000000";
                     document.getElementById('user-greeting').textContent = `שלום, ${this.state.user['שם לקוח']}!`;
                     document.getElementById('user-phone').textContent = this.state.user['מספר טלפון'];
+                } else {
+                    Logger.warn('renderUserInfo called without a user in state.');
                 }
             },
             
             renderMap() {
+                Logger.debug('Rendering map section (placeholder).');
                 // Map rendering logic placeholder
             },
 
             checkForOverdueContainers() {
+                Logger.debug('Checking for overdue containers...');
                 const overdue = this.state.containers.filter(c => {
                     const startDate = dayjs(c['תאריך הזמנה']);
                     const daysPassed = dayjs().diff(startDate, 'day');
@@ -548,15 +625,22 @@
                 });
                 const banner = document.getElementById('overdue-banner');
                 if (overdue.length > 0) {
+                    Logger.warn(`${overdue.length} overdue containers found.`, overdue);
                     banner.classList.remove('hidden');
                 } else {
+                    Logger.info('No overdue containers found.');
                     banner.classList.add('hidden');
                 }
             },
 
             renderActiveOrders() {
+                Logger.debug('Rendering active orders list.');
                 const list = document.getElementById('active-orders-list');
                 list.innerHTML = '';
+                if(this.state.orders.length === 0){
+                    list.innerHTML = `<p class="text-center text-gray-500">אין הזמנות פעילות כרגע.</p>`;
+                    return;
+                }
                 this.state.orders.forEach(order => {
                     const item = document.createElement('li');
                     item.className = 'card p-4 flex justify-between items-center';
@@ -574,8 +658,13 @@
             },
             
             renderProjectsForOrder() {
+                Logger.debug('Rendering projects for new order form.');
                 const select = document.getElementById('project-select');
                 select.innerHTML = '';
+                if (this.state.projects.length === 0) {
+                    select.innerHTML = `<option>לא נמצאו פרויקטים</option>`;
+                    return;
+                }
                 if (this.state.projects.length === 1) {
                     select.disabled = true;
                 }
@@ -588,10 +677,12 @@
             },
 
             goToStep(step) {
+                Logger.debug(`Navigating to wizard step ${step}.`);
                 // Wizard logic placeholder
             },
 
             fetchCatalog() {
+                 Logger.debug('Fetching digital store catalog...');
                  this.api('getCatalog').then(data => {
                     if (data && data.catalog) {
                         this.state.catalog = data.catalog;
@@ -601,6 +692,7 @@
             },
 
             renderCatalog() {
+                Logger.debug('Rendering catalog items.');
                 const grid = document.getElementById('materials-grid');
                 grid.innerHTML = '';
                 this.state.catalog.forEach(material => {
@@ -617,32 +709,21 @@
             },
             
             renderOrderHistory() {
+                Logger.debug('Rendering order history (placeholder).');
                 // History rendering logic placeholder
             },
 
             renderFAQs() {
+                Logger.debug('Rendering FAQs (placeholder).');
                 // FAQs rendering logic placeholder
             },
             
             fetchChatMessages() {
-                // Fetch chat messages and render them
-                // callApi('getChatMessages', { phone: this.state.user['מספר טלפון'] }).then(data => {
-                //     if (data) {
-                //         this.renderChat(data);
-                //     }
-                // });
+                Logger.debug('Fetching chat messages (placeholder).');
             },
             
             renderChat(messages) {
-                const chatContainer = document.getElementById('chat-messages');
-                chatContainer.innerHTML = '';
-                messages.forEach(msg => {
-                    const messageElement = document.createElement('div');
-                    messageElement.className = `p-3 rounded-xl max-w-[75%] ${msg.sender === 'user' ? 'bg-blue-500 text-white self-end' : 'bg-gray-300 text-gray-800 self-start'}`;
-                    messageElement.textContent = msg.text;
-                    chatContainer.appendChild(messageElement);
-                });
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                Logger.debug('Rendering chat messages (placeholder).');
             }
         };
 
@@ -652,3 +733,4 @@
     </script>
 </body>
 </html>
+
