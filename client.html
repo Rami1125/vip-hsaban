@@ -182,59 +182,41 @@
             },
 
             api: async function(action, payload = {}) {
-                // IMPORTANT: This URL is now hardcoded as requested.
-                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzuS9mt0DHWqiMCIO4eDsf2nFHByUVOxWImhpzk-2ofS5hgbk3rz_X6OVUtqhFI_sHq/exec';
-                
-                const requestBody = {
-                    action: action,
-                    payload: payload
-                };
+    // IMPORTANT:
+    // כאן לשים את הכתובת של ה-WebApp כפי שהיא מופיעה ב-Google Apps Script → Deploy → Manage deployments
+    // שים לב: הכתובת חייבת להסתיים ב-/exec ולא ב-/edit או /dev
+    // דוגמה (להחליף בכתובת שלך בפועל):
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbziKRXfz_TOa5wU-d8s54VwWnueGIhOJExFTJ9LTOELqi5aQsG3h0QAbTPK5oB4wtYs1Q/exec';
+    
+    const requestBody = {
+        action: action,
+        payload: payload
+    };
 
-                try {
-                    const response = await fetch(SCRIPT_URL, {
-                        method: 'POST',
-                        mode: 'cors', 
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        redirect: 'follow', // Important for Google Apps Script redirects
-                        body: JSON.stringify(requestBody)
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Network response was not ok. Status: ${response.status}`);
-                    }
-                    return await response.json();
-                } catch (error) {
-                    console.error('API Error:', error);
-                    const loginError = document.getElementById('login-error');
-                    loginError.textContent = 'שגיאת תקשורת. אנא נסה שוב מאוחר יותר.';
-                    loginError.classList.remove('hidden');
-                    return null;
-                }
+    try {
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'cors', 
+            headers: {
+                'Content-Type': 'application/json',
             },
+            redirect: 'follow', // חשוב עבור Google Apps Script
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Network response was not ok. Status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('API Error:', error);
+        const loginError = document.getElementById('login-error');
+        loginError.textContent = 'שגיאת תקשורת. אנא נסה שוב מאוחר יותר.';
+        loginError.classList.remove('hidden');
+        return null;
+    }
+},
 
-            handleLogin: async function() {
-                const phone = document.getElementById('phone-input').value;
-                const password = document.getElementById('password-input').value;
-                const loginBtn = document.getElementById('login-btn');
-                const loginError = document.getElementById('login-error');
-                
-                loginError.classList.add('hidden');
-                loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> מתחבר...';
-                loginBtn.disabled = true;
-
-                const result = await this.api('authenticateUser', { phone, password });
-
-                if (result && result.success) {
-                    this.state.user = result.user;
-                    this.navigateTo('loading');
-                    await this.fetchInitialData();
-                } else {
-                    loginError.textContent = 'מספר טלפון או סיסמה שגויים.';
-                    loginError.classList.remove('hidden');
-                    loginBtn.innerHTML = 'כניסה למערכת';
-                    loginBtn.disabled = false;
                     
                     // --- NEW: Better UX on failure ---
                     const loginForm = document.getElementById('login-form');
